@@ -1,0 +1,33 @@
+<?php
+class InfoPago
+{
+    public $enlace;
+
+    public function __construct()
+    {
+        $this->enlace = new MySqlConnect();
+    }
+
+    public function all()
+    {
+        try {
+            $vSql = "SELECT * FROM infopago;";
+            $vResultado = $this->enlace->ExecuteSQL($vSql);
+            return $vResultado;
+        } catch (Exception $e) {
+            handleException($e);
+        }
+    }
+
+    public function get($id)
+    {
+        try {
+            $vSql = "SELECT * FROM infopago WHERE Id = " . intval($id) . ";";
+            $vResultado = $this->enlace->ExecuteSQL($vSql);
+            return $vResultado;
+        } catch (Exception $e) {
+            handleException($e);
+        }
+    }
+}
+?>
