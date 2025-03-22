@@ -36,7 +36,7 @@ require_once "models/ReservaModel.php";
 require_once "models/RolesUsuarioModel.php";
 require_once "models/TarjetaModel.php";
 require_once "models/UsuarioModel.php";
-
+require_once "models/ImageModel.php";
 
 /***--- Agregar todos los controladores*/
 require_once "controllers/HabitacionController.php";
@@ -57,6 +57,7 @@ require_once "controllers/ReservaController.php";
 require_once "controllers/RolesUsuarioController.php";
 require_once "controllers/TarjetaController.php";
 require_once "controllers/UsuarioController.php";
+require_once "controllers/ImageController.php";
 //Enrutador
 require_once "routes/RoutesController.php";
 $index = new RoutesController();

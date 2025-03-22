@@ -32,7 +32,26 @@ class InfoPagoC
             handleException($e);
         }
     }
-    
+    public function create()
+    {
+        try {
+            $response = new Response();
+            $data = json_decode(file_get_contents('php://input'), true);
+            
+            // Validar ID reserva
+            if(!isset($data['IdReserva']) || empty($data['IdReserva'])) {
+                throw new Exception("ID de reserva requerido");
+            }
+
+            $model = new InfoPagoModel();
+            $result = $model->create($data['IdReserva']);
+            
+            $response->toJSON(["success" => true, "message" => "Pago registrado"]);
+            
+        } catch (Exception $e) {
+            handleException($e);
+        }
+    }
  
 
 }

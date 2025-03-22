@@ -1,5 +1,5 @@
 <?php
-class Complemento
+class ComplementoModel
 {
     public $enlace;
 

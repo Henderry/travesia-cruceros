@@ -11,18 +11,16 @@ class ReservaModel
     public function all()
     {
         try {
-            $vSql = "SELECT r.*, u.Nombre AS NombreUsuario, c.Nombre AS NombreCrucero, fc.FechaSalida
-                    FROM reserva r
-                    JOIN usuario u ON r.IdUsuario = u.Id
-                    JOIN fechascrucero fc ON r.IdFechaCrucero = fc.Id
-                    JOIN crucero c ON fc.IdCrucero = c.Id";
+            $vSql = "SELECT r.*, c.Nombre AS NombreCrucero, fc.FechaSalida 
+                     FROM reserva r
+                     JOIN crucero c ON r.IdCrucero = c.Id
+                     JOIN fechascrucero fc ON r.IdFechaCrucero = fc.Id";
             $vResultado = $this->enlace->ExecuteSQL($vSql);
             return $vResultado;
         } catch (Exception $e) {
             handleException($e);
         }
     }
-
     public function get($id)
     {
         try {
@@ -85,14 +83,21 @@ class ReservaModel
             //consulta de las habitaciones y pasajaeros x habitacion
             
             $vSql="SELECT 
-                    h.Descripcion AS NombreHabitacion, 
-                    rh.CantPasajeros AS CantidadHuespedes
-                FROM 
-                    reservahabitacion rh
-                JOIN 
-                    habitacion h ON rh.IdHabitacion = h.Id
-                WHERE 
-                    rh.idReserva = ".intval($id).";";
+                        h.Descripcion AS NombreHabitacion,
+                        rh.CantPasajeros AS CantidadHuespedes,
+                        phc.Precio AS PrecioHabitacion
+                    FROM 
+                        reservahabitacion rh
+                    JOIN 
+                        habitacion h ON rh.IdHabitacion = h.Id
+                    JOIN 
+                        reserva r ON rh.idReserva = r.Id
+                    JOIN 
+                        precio_habitacion_crucero phc ON 
+                            phc.IdFechasCrucero = r.IdFechaCrucero AND 
+                            phc.IdHabitacion = rh.IdHabitacion
+                    WHERE 
+                        rh.idReserva = ".intval($id).";";
 
             $InfoHabitaciones=$this->enlace->ExecuteSQL($vSql);
             $vResultado->InfoHabitaciones=$InfoHabitaciones;
@@ -171,5 +176,86 @@ class ReservaModel
             handleException($e);
         }
     }
+    
+    
+
+    private function getHabitaciones($reservaId)
+    {
+        $vSql = "SELECT rh.*, h.Tipo AS TipoHabitacion
+                 FROM reservahabitacion rh
+                 JOIN habitacion h ON rh.IdHabitacion = h.Id
+                 WHERE rh.idReserva = " . intval($reservaId);
+        return $this->enlace->ExecuteSQL($vSql);
+    }
+
+    private function getComplementos($reservaId)
+    {
+        $vSql = "SELECT rc.*, c.Descripcion AS NombreComplemento, c.Precio
+                 FROM reserva_complemento rc
+                 JOIN complemento c ON rc.IdComplemento = c.Id
+                 WHERE rc.IdReserva = " . intval($reservaId);
+        return $this->enlace->ExecuteSQL($vSql);
+    }
+
+
+
+
+    public function create($objeto)
+    {
+        try {
+            // 1. Iniciar transacción con SQL puro
+            $this->enlace->executeSQL_DML("START TRANSACTION");
+        
+            // 2. Insertar reserva
+            $vSql = "INSERT INTO reserva (IdUsuario, IdCrucero, IdFechaCrucero, PrecioFinal)
+                     VALUES (" . intval($objeto->IdUsuario) . ",
+                             " . intval($objeto->IdCrucero) . ",
+                             " . intval($objeto->IdFechaCrucero) . ",
+                             " . floatval($objeto->PrecioFinal) . ")";
+            $reservaId = $this->enlace->executeSQL_DML_last($vSql);
+        
+
+            
+            foreach ($objeto->Habitaciones as $habitacion) {
+                $vSql = "SELECT Id FROM habitacion WHERE Id = " . intval($habitacion->IdHabitacion);
+                $existe = $this->enlace->ExecuteSQL($vSql);
+                if(empty($existe)) {
+                    throw new Exception("Habitación no existe");
+                }
+                
+            // 3. Insertar habitaciones
+            foreach ($objeto->Habitaciones as $habitacion) {
+                $vSql = "INSERT INTO reservahabitacion (idReserva, IdHabitacion, CantPasajeros)
+                         VALUES (" . intval($reservaId) . ",
+                                 " . intval($habitacion->IdHabitacion) . ",
+                                 " . intval($habitacion->CantPasajeros) . ")";
+                $this->enlace->executeSQL_DML($vSql);
+            }
+        
+        }
+    
+
+
+          
+            // 4. Insertar complementos (corregido)
+            foreach ($objeto->Complementos as $complemento) {
+                $vSql = "INSERT INTO reserva_complemento (IdReserva, IdComplemento, Cantidad)
+                         VALUES (" . intval($reservaId) . ",
+                                 " . intval($complemento->IdComplemento) . ",
+                                 " . intval($complemento->Cantidad) . ")";
+                $this->enlace->executeSQL_DML($vSql);
+            }
+        
+            // 5. Confirmar transacción
+            $this->enlace->executeSQL_DML("COMMIT");
+        
+            return $this->get($reservaId);
+        } catch (Exception $e) {
+            // 6. Revertir cambios si algo falla
+            $this->enlace->executeSQL_DML("ROLLBACK");
+            handleException($e);
+            return null;
+        }
+    }
+    
 }
-?>

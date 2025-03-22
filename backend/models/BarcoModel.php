@@ -43,7 +43,18 @@
                         FROM barco b
                         WHERE b.Id = " . intval($id);
 
-                $barcoResult = $this->enlace->ExecuteSQL($vSql, 'asoc'); // Ejecuta la consulta
+                $barcoResult = $this->enlace->ExecuteSQL($vSql); // Ejecuta la consulta
+                $barcoResult=$barcoResult[0];
+
+                $vSql="SELECT 
+                            IdHabitacion,
+                            CantDisponible
+                            from barco_habitacion
+                            where IdBarco=". intval($id);
+
+                $habitacionesBarco = $this->enlace->ExecuteSQL($vSql);
+                $barcoResult->habitaciones=$habitacionesBarco;
+
 
                 // Verifica si se obtuvo algún resultado
                 if (empty($barcoResult)) {
@@ -51,9 +62,9 @@
                 }
 
                 // Asigna el primer registro a $barco
-                $barco = $barcoResult[0];
+                
 
-                return $barco;
+                return $barcoResult;
             } catch (Exception $e) {
                 handleException($e);
             }
@@ -115,6 +126,19 @@
                     WHERE Id = $objeto->Id";
 
             $this->enlace->executeSQL_DML($sql);
+
+            if (isset($objeto->habitaciones) && is_array($objeto->habitaciones)) {
+                $vSql="DELETE from barco_habitacion where IdBarco = $objeto->Id";
+                $this->enlace->executeSQL_DML($vSql);
+                foreach ($objeto->habitaciones as $habitacion) {
+                    $sqlHabitacion = "INSERT INTO barco_habitacion (IdBarco, IdHabitacion, CantDisponible) 
+                                      VALUES ($objeto->Id, {$habitacion->IdHabitacion}, {$habitacion->CantDisponible})";
+                    $this->enlace->executeSQL_DML($sqlHabitacion);
+                }
+            }
+
+
+
             return $this->get($objeto->Id);
 
         } catch (Exception $e) {

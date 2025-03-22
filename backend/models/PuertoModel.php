@@ -1,5 +1,5 @@
 <?php
-class Puerto
+class PuertoModel
 {
     public $enlace;
 
