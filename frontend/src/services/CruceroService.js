@@ -1,7 +1,7 @@
 import axios from 'axios';
 const BASE_URL = import.meta.env.VITE_BASE_URL2 + 'Crucero';
 
-class BarcoService {
+class CruceroService {
   // Obtener el listado de barcos
   getCruceros() {
     return axios.get(BASE_URL);
@@ -16,19 +16,35 @@ class BarcoService {
     return axios.get(`${BASE_URL}/getItinerarioById/${CruceroId}`); 
   }
 
+  getHabitacionesById(CruceroId) {
+    return axios.get(`${BASE_URL}/getHabitacionesById/${CruceroId}`); 
+  }
+
+
   getFechasCruceroById(CruceroId) {
     return axios.get(`${BASE_URL}/getFechasCruceroById/${CruceroId}`); 
   }
-
+  getUpdate(Crucero) {
+    return axios.get(`${BASE_URL}/getUpdate/${Crucero}`); 
+  }
   // Crear un nuevo barco
-  createBarco(barco) {
-    return axios.post(BASE_URL, JSON.stringify(barco));
+  createCrucero(crucero) {
+    return axios.post(BASE_URL, JSON.stringify(crucero));
   }
   
   // Actualizar un barco existente
-  updateBarco(barco) {
-    return axios.put(BASE_URL, JSON.stringify(barco));
+  updateCrucero(crucero) {
+    return axios.put(BASE_URL, JSON.stringify(crucero));
   }
+  getPuertos() {
+    return axios.get(import.meta.env.VITE_BASE_URL2 + 'puertoC');
+  }
+  
+
+
+  
+  // Actualizar crucero
+
 }
 
-export default new BarcoService();
+export default new CruceroService();
