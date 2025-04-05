@@ -15,6 +15,13 @@ import Grid from '@mui/material/Grid2';
 import HabitacionService from '../../services/HabitacionService';
 import ReservaService from '../../services/ReservaService';
 
+
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import InvoicePDF from "./InvoicePDF"; // Asegúrate de que la ruta sea correcta
+import Button from '@mui/material/Button';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'; // Ícono para el botón
+
+
 export function DetailReserva() {
   const routeParams = useParams();
   console.log(routeParams);
@@ -159,6 +166,26 @@ export function DetailReserva() {
                 : 'Pago completado'}
             </Typography>
           </Box>
+        
+          <Box sx={{ textAlign: "center", mt: 3 }}>
+  <PDFDownloadLink
+    document={<InvoicePDF data={data} />}
+    fileName={`Factura_Reserva_${data.Id}.pdf`}
+    style={{ textDecoration: "none" }}
+  >
+    {({ loading }) => (
+      <Button
+        variant="contained"
+        color="primary"
+        startIcon={<PictureAsPdfIcon />}
+        disabled={loading}
+      >
+        {loading ? "Generando PDF..." : "Descargar PDF"}
+      </Button>
+    )}
+  </PDFDownloadLink>
+</Box>
+        
         </Box>
       }
     </Container>
