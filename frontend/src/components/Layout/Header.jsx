@@ -71,7 +71,8 @@ export default function Header() {
     { name: "Habitaciones", link: "/habitacion-table" },
     { name: "Barcos", link: "/barco-table" },
     { name: "Cruceros", link: "/crucero-table" },
-    { name: "Complementos", link: "/complemento-table" }
+    { name: "Complementos", link: "/complemento-table" },
+    
   ];
   
   const userItems = [
@@ -84,6 +85,8 @@ export default function Header() {
     { name: "Habitaciones", link: "/habitacion", roles: null },    
     { name: "Barcos", link: "/barco", roles: null },
     { name: "Cruceros", link: "/crucero", roles: null },
+    
+    { name: "Gestion Reservas", link: "/gestion", roles: null },
        { name: "Reservas", link: "/reserva", roles: null },
        { 
         name: "Mantenimiento", 

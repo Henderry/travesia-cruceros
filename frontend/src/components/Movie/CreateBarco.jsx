@@ -86,7 +86,7 @@ export function CreateBarco() {
     control,
     name: 'habitaciones',
   });
-
+    
   // Cargar tipos de habitaciones al montar el componente
   useEffect(() => {
     HabitacionService.getHabitacion()

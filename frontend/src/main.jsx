@@ -20,6 +20,10 @@ import TableHabitacion from "./components/Movie/TableHabitacion";
 import TableBarco from "./components/Movie/TableBarco";
 import { CreateBarco } from "./components/Movie/CreateBarco";
 import { UpdateBarco } from "./components/Movie/UpdateBarco";
+import TableCrucero from "./components/Movie/TableCrucero";
+import { CreateCrucero } from "./components/Movie/CreateCrucero";
+import { UpdateCrucero } from "./components/Movie/UpdateCrucero";
+import ReservaForm from "./components/Movie/GestionReserva";
 
 
 const rutas=createBrowserRouter(
@@ -88,10 +92,23 @@ const rutas=createBrowserRouter(
 {
 path: '/barco/update/:id',
 element: <UpdateBarco/>
-}
-
-
-
+},
+{
+  path: '/crucero-table',
+  element: <TableCrucero/>
+},
+{
+  path: '/crucero/crear',
+  element: <CreateCrucero/>
+},
+{
+  path: '/gestion',
+  element: <ReservaForm/>
+},
+{
+  path: '/crucero/update/:id',
+  element: <UpdateCrucero/>
+  },
     
       ]
     }

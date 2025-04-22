@@ -12,22 +12,50 @@ export function UpdateHabitacion() {
   const navigate = useNavigate();
   const { id } = useParams(); // Obtener ID de la URL
   const [error, setError] = useState(null);
+  const [currentTipo, setCurrentTipo] = useState(""); // Estado para el tipo actual
+  // Esquema de validaciónvalidación
+    const schema = yup.object({
+      Descripcion: yup
+        .string()
+        .required('La descripción es requerida')
+        .min(5, "Mínimo 5 caracteres"),
+         MaxHuespedes: yup
+                .number()
+                .typeError('Debe ser un número')
+                .required('Campo requerido')
+                .positive('Debe ser positivo')
+                .integer('Debe ser un número entero')
+                .min(yup.ref('MinHusoedes'), 'Debe ser mayor o igual al mínimo de huéspedes'),
+      MinHusoedes: yup
+             .number()
+             .typeError('Debe ser un número')
+             .required('Campo requerido')
+             .positive('Debe ser positivo')
+             .integer('Debe ser un número entero'),
+         Tamano: yup
+                .number()
+                .typeError('Debe ser un número')
+                .required('Campo requerido')
+                .positive('Debe ser positivo'),
 
-  // Esquema de validación
-  const schema = yup.object().shape({
-    Descripcion: yup.string().required("La descripción es requerida"),
-    MinHusoedes: yup
-      .number()
-      .required("Mínimo de huéspedes es requerido")
-      .positive(),
-    Tamano: yup.number().required("Tamaño es requerido").positive(),
-    Tipo: yup.string().required("El tipo es requerido"),
-    Precio: yup.number().required("Precio es requerido").positive(),
-    MaxHuespedes: yup
-      .number()
-      .required("Máximo de huéspedes es requerido")
-      .positive(),
-  });
+        Tipo: yup.string().required("El tipo es requerido").test(
+          "unique-tipo",
+          "El tipo ya existe",
+          function (value) {
+            if (!value) return false; // Si el campo está vacío, falla
+            if (!loadedTipos) return true; // Si los tipos no están cargados, pasa
+            // Validación de unicidad excluyendo el tipo actual
+            return !tiposHabitacion.some(
+              (tipoItem) =>
+                tipoItem.Tipo.toLowerCase() === value.toLowerCase() &&
+                tipoItem.Tipo.toLowerCase() !== currentTipo.toLowerCase()
+            );
+          }
+        ),
+        // Validación personalizada: no debe existir otro registro con el mismo tipo
+      
+      // Puedes agregar más validaciones para otros campos si es necesario
+    });
 
   const {
     control,
@@ -38,12 +66,30 @@ export function UpdateHabitacion() {
     resolver: yupResolver(schema),
   });
 
+
+
+  const [tiposHabitacion, setTiposHabitacion] = useState([]);
+  const [loadedTipos, setLoadedTipos] = useState(false);
+  useEffect(() => {
+    HabitacionService.getTiposHabitacion()
+      .then((response) => {
+        setTiposHabitacion(response.data);
+        setLoadedTipos(true);
+      })
+      .catch((err) => {
+        setError(err);
+        setLoadedTipos(false);
+      });
+  }, []);
+
+
   // Cargar datos iniciales
   useEffect(() => {
     const loadHabitacion = async () => {
       try {
         const response = await HabitacionService.getHabitacionById(id);
         reset(response.data); // Rellenar formulario con datos existentes
+        setCurrentTipo(response.data.Tipo); // Guardar el tipo actual
       } catch (error) {
         setError(error);
         toast.error("Error cargando habitación");
@@ -162,23 +208,7 @@ export function UpdateHabitacion() {
           />
         </Grid>
 
-        <Grid item xs={6}>
-          <Controller
-            name="Precio"
-            control={control}
-            defaultValue="" 
-            render={({ field }) => (
-              <TextField
-                {...field}
-                label="Precio"
-                type="number"
-                fullWidth
-                error={!!errors.Precio}
-                helperText={errors.Precio?.message}
-              />
-            )}
-          />
-        </Grid>
+        
 
         <Grid item xs={12}>
           <Button type="submit" variant="contained" color="primary">
