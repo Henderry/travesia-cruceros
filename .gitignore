@@ -1,0 +1,17 @@
+# Dependencias
+/frontend/node_modules/
+/backend/vendor/
+
+# Build
+/frontend/dist/
+
+# Configuración local y secretos
+/frontend/.env
+/backend/config.php
+
+# Logs (se regeneran solos)
+/backend/Log/*.log
+
+# Sistema operativo / editores
+.DS_Store
+Thumbs.db
