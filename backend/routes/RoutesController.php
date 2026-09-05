@@ -1,47 +1,64 @@
 <?php
 class RoutesController
 {
-    private $authMiddleware;
-    private $protectedRoutes = [];
+    /**
+     * Permisos por controlador.
+     * - Lectura (GET) del catálogo: pública.
+     * - Escritura del catálogo (POST/PUT/DELETE): solo administradores.
+     * - Reservas y pagos: requieren sesión; el controlador valida que cada
+     *   cliente solo vea y modifique lo suyo.
+     */
+    private function autorizar($metodo, $controlador, $accion)
+    {
+        $controlador = strtolower((string) $controlador);
+        $accion = strtolower((string) $accion);
 
-    public function __construct() {
-        //$this->authMiddleware = new AuthMiddleware();
-        //$this->registerRoutes();
-        $this->routes();
+        $publicas = ['usuarioc' => ['login', 'registrar']];
+        if (isset($publicas[$controlador]) && in_array($accion, $publicas[$controlador], true)) {
+            return;
+        }
+        if ($controlador === 'usuarioc' && $accion === 'perfil') {
+            Auth::requerirLogin();
+            return;
+        }
+        if (in_array($controlador, ['reserva', 'infopagoc'], true)) {
+            Auth::requerirLogin();
+            return;
+        }
+        $soloAdmin = ['reportec', 'usuarioc', 'huespedc', 'rolesusuarioc',
+                      'reserva_habitacionc', 'reserva_complementoc'];
+        if (in_array($controlador, $soloAdmin, true)) {
+            Auth::requerirAdmin();
+            return;
+        }
+        if ($metodo !== 'GET') {
+            Auth::requerirAdmin();
+        }
     }
 
-    private function registerRoutes() {
-        // Registrar rutas protegidas
-        //---------------------  Metodo,path (en minuscula),controlador, accion, array de nombres de roles
-        $this->addProtectedRoute('GET', '/apimovie/actor', 'actor', 'index', ['Administrador']);
-    }
+    /**
+     * Segmentos de la URL sin la carpeta del API:
+     * [1 => base, 2 => controlador, 3 => acción, 4 => param1, 5 => param2].
+     */
+    private function segmentosDeRuta()
+    {
+        $ruta = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
+        $base = $_SERVER['API_BASE']
+            ?? rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
 
-    public function routes() {
-        $method = $_SERVER['REQUEST_METHOD'];
-        $path = strtolower($_SERVER['REQUEST_URI']);
+        if ($base !== '' && stripos($ruta . '/', $base . '/') === 0) {
+            $ruta = substr($ruta, strlen($base));
+        }
 
-        // Si la ruta es protegida, aplicar autenticación
-        if ($this->isProtectedRoute($method, $path)) {
-            $route = $this->protectedRoutes["$method:$path"];
-            //Verifica los roles autorizados con los del usuario del token
-            if(!$this->authMiddleware->handle($route['requiredRole'])){
-                return;
+        $segmentos = [1 => $base !== '' ? $base : 'api'];
+        foreach (explode('/', $ruta) as $segmento) {
+            if ($segmento !== '') {
+                $segmentos[] = urldecode($segmento);
             }
-           
-        } 
+        }
+        return $segmentos;
     }
 
-    private function addProtectedRoute($method, $path, $controllerName, $action, $requiredRole) {
-        $this->protectedRoutes["$method:$path"] = [
-            'controller' => $controllerName,
-            'action' => $action,
-            'requiredRole' => $requiredRole
-        ];
-    }
-
-    private function isProtectedRoute($method, $path) {
-        return isset($this->protectedRoutes["$method:$path"]);
-    }
     public function index()
     {
         //include "routes/routes.php";
@@ -67,9 +84,7 @@ class RoutesController
                 http_response_code(200);
                 exit();
             }
-            $routesArray = explode("/", $_SERVER['REQUEST_URI']);
-            // Eliminar elementos vacíos del array
-            $routesArray = array_filter($routesArray);
+            $routesArray = $this->segmentosDeRuta();
 
             if (count($routesArray) < 2) {
                 $json = array(
@@ -88,6 +103,7 @@ class RoutesController
                 if ($controller) {
                     try {
                         if (class_exists($controller)) {
+                            $this->autorizar($_SERVER['REQUEST_METHOD'], $controller, $action);
                             $response = new $controller();
                             switch ($_SERVER['REQUEST_METHOD']) {
                                 case 'GET':
