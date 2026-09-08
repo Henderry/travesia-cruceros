@@ -1,261 +1,231 @@
 <?php
 class ReservaModel
 {
-    public $enlace;
+    // IVA de Costa Rica
+    const IVA_PORCENTAJE = 13;
+
+    private $db;
 
     public function __construct()
     {
-        $this->enlace = new MySqlConnect();
+        $this->db = new MySqlConnect();
     }
 
-    public function all()
+    private static function iva($subtotal)
     {
-        try {
-            $vSql = "SELECT r.*, c.Nombre AS NombreCrucero, fc.FechaSalida 
-                     FROM reserva r
-                     JOIN crucero c ON r.IdCrucero = c.Id
-                     JOIN fechascrucero fc ON r.IdFechaCrucero = fc.Id";
-            $vResultado = $this->enlace->ExecuteSQL($vSql);
-            return $vResultado;
-        } catch (Exception $e) {
-            handleException($e);
-        }
+        return round($subtotal * self::IVA_PORCENTAJE / 100, 2);
     }
+
+    /**
+     * Listado de reservas. Si se indica $idUsuario, solo las de ese cliente.
+     */
+    public function all($idUsuario = null)
+    {
+        $sql = "SELECT r.Id, r.IdUsuario, u.Nombre AS NombreUsuario, r.IdCrucero,
+                       c.Nombre AS NombreCrucero, c.Foto, r.IdFechaCrucero,
+                       fc.FechaSalida, fc.CantDias, fc.FechaLimitePago, r.FechaReserva,
+                       r.PrecioFinal AS Subtotal,
+                       (SELECT COALESCE(SUM(CantPasajeros), 0) FROM reservahabitacion WHERE idReserva = r.Id) AS Pasajeros,
+                       EXISTS (SELECT 1 FROM infopago p WHERE p.IdReserva = r.Id) AS Pagada
+                FROM reserva r
+                JOIN usuario u ON u.id = r.IdUsuario
+                JOIN crucero c ON c.Id = r.IdCrucero
+                JOIN fechascrucero fc ON fc.Id = r.IdFechaCrucero";
+        $params = [];
+        if ($idUsuario !== null) {
+            $sql .= " WHERE r.IdUsuario = ?";
+            $params[] = (int) $idUsuario;
+        }
+        $sql .= " ORDER BY r.FechaReserva DESC";
+
+        $filas = $this->db->consultar($sql, $params);
+        foreach ($filas as $f) {
+            $f->Subtotal = (float) $f->Subtotal;
+            $f->IVA = self::iva($f->Subtotal);
+            $f->Total = round($f->Subtotal + $f->IVA, 2);
+            $f->Pagada = (bool) $f->Pagada;
+        }
+        return $filas;
+    }
+
+    /**
+     * Detalle completo de una reserva: viaje, habitaciones, complementos,
+     * huéspedes, montos e información de pago.
+     */
     public function get($id)
     {
-        try {
-
-            //consulta general
-            $vSql = "SELECT r.*, u.Nombre AS NombreUsuario, c.Nombre AS NombreCrucero, fc.FechaSalida
-                    FROM reserva r
-                    JOIN usuario u ON r.IdUsuario = u.Id
-                    JOIN fechascrucero fc ON r.IdFechaCrucero = fc.Id
-                    JOIN crucero c ON fc.IdCrucero = c.Id
-                    WHERE r.Id = ". intval($id);
-            $vResultado = $this->enlace->ExecuteSQL($vSql);
-            $vResultado = $vResultado[0];
-
-                //consulta y calculo de fecha de regreso
-
-            $vSql="SELECT 
-                        DATE_ADD(fc.FechaSalida, INTERVAL fc.CantDias DAY) AS FechaVuelta
-                    FROM 
-                        fechascrucero fc
-                    JOIN 
-                        reserva r ON fc.Id = r.IdFechaCrucero
-                    WHERE 
-                        r.Id = ".intval($id).";";
-
-            $FechaRegreso=$this->enlace->ExecuteSQL($vSql);
-            $vResultado->FechaRegreso=$FechaRegreso[0]->FechaVuelta;
-
-            //consulta del puerto de Salida
-
-            $vSql ="SELECT p.Nombre AS NombrePuerto
-                        FROM itinerario i
-                        JOIN puerto p ON i.IdPuerto = p.Id
-                        JOIN fechascrucero fc ON i.IdCrucero = fc.IdCrucero
-                        JOIN reserva r ON fc.Id = r.IdFechaCrucero
-                        WHERE r.Id = ".intval($id)."
-                        ORDER BY i.Fecha asc
-                        LIMIT 1;";
-            
-            $PuertoSalida=$this->enlace->ExecuteSQL($vSql);
-            $vResultado->PuertoSalida=$PuertoSalida[0]->NombrePuerto;
-            
-            //consulta del puerto de vuelta
-
-            $vSql ="SELECT p.Nombre AS NombrePuerto
-                        FROM itinerario i
-                        JOIN puerto p ON i.IdPuerto = p.Id
-                        JOIN fechascrucero fc ON i.IdCrucero = fc.IdCrucero
-                        JOIN reserva r ON fc.Id = r.IdFechaCrucero
-                        WHERE r.Id = ".intval($id)."
-                        ORDER BY i.Fecha desc
-                        LIMIT 1;";
-            
-            $PuertoRegreso=$this->enlace->ExecuteSQL($vSql);
-            $vResultado->PuertoRegreso=$PuertoRegreso[0]->NombrePuerto;
-
-
-
-
-            //consulta de las habitaciones y pasajaeros x habitacion
-            
-            $vSql="SELECT 
-                        h.Descripcion AS NombreHabitacion,
-                        rh.CantPasajeros AS CantidadHuespedes,
-                        phc.Precio AS PrecioHabitacion
-                    FROM 
-                        reservahabitacion rh
-                    JOIN 
-                        habitacion h ON rh.IdHabitacion = h.Id
-                    JOIN 
-                        reserva r ON rh.idReserva = r.Id
-                    JOIN 
-                        precio_habitacion_crucero phc ON 
-                            phc.IdFechasCrucero = r.IdFechaCrucero AND 
-                            phc.IdHabitacion = rh.IdHabitacion
-                    WHERE 
-                        rh.idReserva = ".intval($id).";";
-
-            $InfoHabitaciones=$this->enlace->ExecuteSQL($vSql);
-            $vResultado->InfoHabitaciones=$InfoHabitaciones;
-
-
-
-            //consulta para el precio total por las habitaciones reservadas
-            $vSql="SELECT 
-                        r.Id AS ReservaId,
-                        SUM(phc.Precio) AS TotalPago
-                    FROM 
-                        reserva r
-                    JOIN 
-                        reservahabitacion rh ON r.Id = rh.IdReserva
-                    JOIN 
-                        precio_habitacion_crucero phc ON rh.IdHabitacion = phc.IdHabitacion
-                    WHERE 
-                        r.Id = ".intval($id)."  
-                        AND phc.IdFechasCrucero = r.IdFechaCrucero  
-                    GROUP BY 
-                        r.Id;";
-
-            // consulta para obtener lso complemetos de una reserva junto a su cantidad y precio total
-            $PrecioTotalHabitaciones=$this->enlace->ExecuteSQL($vSql);
-            $vResultado->PrecioTotalHabitacione=$PrecioTotalHabitaciones[0]->TotalPago;
-
-            $vSql="SELECT 
-                    c.Descripcion AS NombreComplemento, 
-                    rc.Cantidad AS CantidadComplemento, 
-                    (c.PrecioAplicado * rc.Cantidad) AS PrecioTotal
-                FROM 
-                    reserva_complemento rc
-                JOIN 
-                    complemento c ON rc.IdComplemento = c.Id
-                WHERE 
-                    rc.IdReserva = ".intval($id).";";
-            
-            $InfoComplementos=$this->enlace->ExecuteSQL($vSql);
-            $vResultado->InfoComplementos=$InfoComplementos;
-            
-
-            //Impuestos y tarifas
-            $vResultado->IVA=5;
-
-            //Precio Final(Subtotal+IVA)
-            $vSql="SELECT 
-                    ((PrecioFinal * 0.05)+PrecioFinal) as PrecioTotal from reserva
-                    where Id =".intval($id).";";
-
-            $PrecioTotal=$this->enlace->ExecuteSQL($vSql);
-            $vResultado->PrecioTotal=$PrecioTotal[0]->PrecioTotal;
-
-            //consulta para verificra si el pago se hizo o no
-            $vSql="SELECT 
-                    CASE 
-                        WHEN EXISTS (SELECT 1 FROM Infopago WHERE IdReserva = ".intval($id).") THEN 1
-                        ELSE 0
-                    END AS PagoExistente;";
-
-            $EstadoPago=$this->enlace->ExecuteSQL($vSql);
-            $vResultado->EstadoPago=$EstadoPago[0]->PagoExistente;
-
-
-            //consulta a la fecha limite de pago en caso de que no se haya pagado
-            if($EstadoPago[0]->PagoExistente == "0"){
-                $vSql="SELECT fc.FechaLimitePago
-                        FROM reserva r
-                        JOIN fechascrucero fc ON r.IdFechaCrucero = fc.Id
-                        WHERE r.Id = ".intval($id).";";
-                $FechaLimitePago=$this->enlace->ExecuteSQL($vSql);
-                $vResultado->FechaLimitePago=$FechaLimitePago[0]->FechaLimitePago;
-            }
-
-            return $vResultado;
-        } catch (Exception $e) {
-            handleException($e);
-        }
-    }
-    
-    
-
-    private function getHabitaciones($reservaId)
-    {
-        $vSql = "SELECT rh.*, h.Tipo AS TipoHabitacion
-                 FROM reservahabitacion rh
-                 JOIN habitacion h ON rh.IdHabitacion = h.Id
-                 WHERE rh.idReserva = " . intval($reservaId);
-        return $this->enlace->ExecuteSQL($vSql);
-    }
-
-    private function getComplementos($reservaId)
-    {
-        $vSql = "SELECT rc.*, c.Descripcion AS NombreComplemento, c.Precio
-                 FROM reserva_complemento rc
-                 JOIN complemento c ON rc.IdComplemento = c.Id
-                 WHERE rc.IdReserva = " . intval($reservaId);
-        return $this->enlace->ExecuteSQL($vSql);
-    }
-
-
-
-
-    public function create($objeto)
-    {
-        try {
-            // 1. Iniciar transacción con SQL puro
-            $this->enlace->executeSQL_DML("START TRANSACTION");
-        
-            // 2. Insertar reserva
-            $vSql = "INSERT INTO reserva (IdUsuario, IdCrucero, IdFechaCrucero, PrecioFinal)
-                     VALUES (" . intval($objeto->IdUsuario) . ",
-                             " . intval($objeto->IdCrucero) . ",
-                             " . intval($objeto->IdFechaCrucero) . ",
-                             " . floatval($objeto->PrecioFinal) . ")";
-            $reservaId = $this->enlace->executeSQL_DML_last($vSql);
-        
-
-            
-            foreach ($objeto->Habitaciones as $habitacion) {
-                $vSql = "SELECT Id FROM habitacion WHERE Id = " . intval($habitacion->IdHabitacion);
-                $existe = $this->enlace->ExecuteSQL($vSql);
-                if(empty($existe)) {
-                    throw new Exception("Habitación no existe");
-                }
-                
-            // 3. Insertar habitaciones
-            foreach ($objeto->Habitaciones as $habitacion) {
-                $vSql = "INSERT INTO reservahabitacion (idReserva, IdHabitacion, CantPasajeros)
-                         VALUES (" . intval($reservaId) . ",
-                                 " . intval($habitacion->IdHabitacion) . ",
-                                 " . intval($habitacion->CantPasajeros) . ")";
-                $this->enlace->executeSQL_DML($vSql);
-            }
-        
-        }
-    
-
-
-          
-            // 4. Insertar complementos (corregido)
-            foreach ($objeto->Complementos as $complemento) {
-                $vSql = "INSERT INTO reserva_complemento (IdReserva, IdComplemento, Cantidad)
-                         VALUES (" . intval($reservaId) . ",
-                                 " . intval($complemento->IdComplemento) . ",
-                                 " . intval($complemento->Cantidad) . ")";
-                $this->enlace->executeSQL_DML($vSql);
-            }
-        
-            // 5. Confirmar transacción
-            $this->enlace->executeSQL_DML("COMMIT");
-        
-            return $this->get($reservaId);
-        } catch (Exception $e) {
-            // 6. Revertir cambios si algo falla
-            $this->enlace->executeSQL_DML("ROLLBACK");
-            handleException($e);
+        $id = (int) $id;
+        $r = $this->db->consultarUno(
+            "SELECT r.Id, r.IdUsuario, u.Nombre AS NombreUsuario, u.Correo AS CorreoUsuario,
+                    r.IdCrucero, c.Nombre AS NombreCrucero, c.Foto, b.Nombre AS NombreBarco,
+                    r.IdFechaCrucero, fc.FechaSalida, fc.CantDias, fc.FechaLimitePago,
+                    DATE_ADD(fc.FechaSalida, INTERVAL fc.CantDias DAY) AS FechaRegreso,
+                    r.FechaReserva, r.PrecioFinal AS Subtotal
+             FROM reserva r
+             JOIN usuario u ON u.id = r.IdUsuario
+             JOIN crucero c ON c.Id = r.IdCrucero
+             LEFT JOIN barco b ON b.Id = c.IdBarco
+             JOIN fechascrucero fc ON fc.Id = r.IdFechaCrucero
+             WHERE r.Id = ?",
+            [$id]
+        );
+        if (!$r) {
             return null;
         }
+
+        $puertos = $this->db->consultar(
+            "SELECT p.Nombre FROM itinerario i JOIN puerto p ON p.Id = i.IdPuerto
+             WHERE i.IdCrucero = ? ORDER BY i.Fecha",
+            [(int) $r->IdCrucero]
+        );
+        $r->PuertoSalida = $puertos ? $puertos[0]->Nombre : null;
+        $r->PuertoRegreso = $puertos ? end($puertos)->Nombre : null;
+
+        $r->Habitaciones = $this->db->consultar(
+            "SELECT rh.IdHabitacion, h.Tipo, h.Descripcion, rh.CantPasajeros,
+                    COALESCE(phc.Precio, 0) AS Precio
+             FROM reservahabitacion rh
+             JOIN habitacion h ON h.Id = rh.IdHabitacion
+             LEFT JOIN precio_habitacion_crucero phc
+                    ON phc.IdHabitacion = rh.IdHabitacion AND phc.IdFechasCrucero = ?
+             WHERE rh.idReserva = ?",
+            [(int) $r->IdFechaCrucero, $id]
+        );
+
+        $r->Complementos = $this->db->consultar(
+            "SELECT rc.IdComplemento, c.Descripcion, rc.Cantidad,
+                    c.PrecioAplicado AS PrecioUnitario,
+                    (c.PrecioAplicado * rc.Cantidad) AS Total
+             FROM reserva_complemento rc
+             JOIN complemento c ON c.Id = rc.IdComplemento
+             WHERE rc.IdReserva = ?",
+            [$id]
+        );
+
+        $r->Huespedes = $this->db->consultar(
+            "SELECT Nombre, Sexo, Edad, Telefono FROM huesped WHERE IdReserva = ? ORDER BY Id",
+            [$id]
+        );
+
+        $pago = $this->db->consultarUno(
+            "SELECT Fecha, Monto FROM infopago WHERE IdReserva = ? ORDER BY Id DESC LIMIT 1",
+            [$id]
+        );
+
+        $r->Subtotal = (float) $r->Subtotal;
+        $r->TotalHabitaciones = array_sum(array_map(fn($h) => (float) $h->Precio, $r->Habitaciones));
+        $r->TotalComplementos = array_sum(array_map(fn($c) => (float) $c->Total, $r->Complementos));
+        $r->IVAPorcentaje = self::IVA_PORCENTAJE;
+        $r->IVA = self::iva($r->Subtotal);
+        $r->Total = round($r->Subtotal + $r->IVA, 2);
+        $r->Pagada = (bool) $pago;
+        $r->FechaPago = $pago->Fecha ?? null;
+        $r->MontoPagado = $pago ? (float) $pago->Monto : 0;
+        return $r;
     }
-    
+
+    /**
+     * Crea una reserva con habitaciones, complementos y huéspedes en una sola
+     * transacción. El precio lo calculan los triggers de la base de datos a partir
+     * de la tarifa de la fecha elegida, así que el cliente no puede alterarlo.
+     */
+    public function create($idUsuario, $datos)
+    {
+        $idCrucero = (int) ($datos->IdCrucero ?? 0);
+        $idFecha = (int) ($datos->IdFechaCrucero ?? 0);
+
+        $fecha = $this->db->consultarUno(
+            "SELECT Id, FechaSalida FROM fechascrucero WHERE Id = ? AND IdCrucero = ?",
+            [$idFecha, $idCrucero]
+        );
+        if (!$fecha) {
+            Auth::responder(422, 'La fecha seleccionada no corresponde al crucero');
+        }
+        if ($fecha->FechaSalida <= date('Y-m-d')) {
+            Auth::responder(422, 'Esa salida ya no está disponible para reservar');
+        }
+
+        // Agrupar habitaciones del mismo tipo (la llave primaria es reserva + tipo)
+        $porTipo = [];
+        foreach (($datos->Habitaciones ?? []) as $h) {
+            $tipo = (int) $h->IdHabitacion;
+            $porTipo[$tipo] = ($porTipo[$tipo] ?? 0) + max(1, (int) $h->CantPasajeros);
+        }
+        if (!$porTipo) {
+            Auth::responder(422, 'La reserva debe incluir al menos una habitación');
+        }
+        foreach (array_keys($porTipo) as $tipo) {
+            $tarifa = $this->db->consultarUno(
+                "SELECT Id FROM precio_habitacion_crucero WHERE IdFechasCrucero = ? AND IdHabitacion = ?",
+                [$idFecha, $tipo]
+            );
+            if (!$tarifa) {
+                Auth::responder(422, 'Uno de los camarotes no está disponible en esta salida');
+            }
+        }
+
+        $complementos = [];
+        foreach (($datos->Complementos ?? []) as $c) {
+            $cant = (int) $c->Cantidad;
+            if ($cant > 0) {
+                $complementos[(int) $c->IdComplemento] = ($complementos[(int) $c->IdComplemento] ?? 0) + $cant;
+            }
+        }
+
+        try {
+            $this->db->beginTransaction();
+
+            $idReserva = $this->db->ejecutar(
+                "INSERT INTO reserva (IdUsuario, IdCrucero, IdFechaCrucero, PrecioFinal) VALUES (?, ?, ?, 0)",
+                [(int) $idUsuario, $idCrucero, $idFecha]
+            )['id'];
+
+            foreach ($porTipo as $tipo => $pasajeros) {
+                $this->db->ejecutar(
+                    "INSERT INTO reservahabitacion (idReserva, IdHabitacion, CantPasajeros) VALUES (?, ?, ?)",
+                    [$idReserva, $tipo, $pasajeros]
+                );
+            }
+            foreach ($complementos as $idComp => $cant) {
+                $this->db->ejecutar(
+                    "INSERT INTO reserva_complemento (IdReserva, IdComplemento, Cantidad) VALUES (?, ?, ?)",
+                    [$idReserva, $idComp, $cant]
+                );
+            }
+            foreach (($datos->Huespedes ?? []) as $h) {
+                if (empty(trim($h->Nombre ?? ''))) {
+                    continue;
+                }
+                $this->db->ejecutar(
+                    "INSERT INTO huesped (IdReserva, Nombre, Sexo, Edad, Telefono) VALUES (?, ?, ?, ?, ?)",
+                    [$idReserva, trim($h->Nombre), $h->Sexo ?? null,
+                     isset($h->Edad) && $h->Edad !== '' ? (int) $h->Edad : null, $h->Telefono ?? null]
+                );
+            }
+
+            // Precio final = tarifas de la fecha + complementos (misma regla que los triggers)
+            $this->db->ejecutar(
+                "UPDATE reserva r
+                 SET r.PrecioFinal =
+                     (SELECT COALESCE(SUM(phc.Precio), 0)
+                        FROM reservahabitacion rh
+                        JOIN precio_habitacion_crucero phc
+                          ON phc.IdHabitacion = rh.IdHabitacion AND phc.IdFechasCrucero = r.IdFechaCrucero
+                       WHERE rh.idReserva = r.Id)
+                   + (SELECT COALESCE(SUM(c.PrecioAplicado * rc.Cantidad), 0)
+                        FROM reserva_complemento rc
+                        JOIN complemento c ON c.Id = rc.IdComplemento
+                       WHERE rc.IdReserva = r.Id)
+                 WHERE r.Id = ?",
+                [$idReserva]
+            );
+
+            $this->db->commit();
+        } catch (Exception $e) {
+            $this->db->rollback();
+            handleException($e);
+        }
+
+        return $this->get($idReserva);
+    }
 }

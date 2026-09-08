@@ -1,5 +1,5 @@
 <?php
-class ReservaComplemento
+class Reserva_ComplementoModel
 {
     public $enlace;
 
@@ -32,4 +32,3 @@ class ReservaComplemento
         }
     }
 }
-?>

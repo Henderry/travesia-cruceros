@@ -81,4 +81,16 @@ class barco
         }
     }
 
+
+    /** GET /barco/catalogo */
+    public function catalogo()
+    {
+        (new Response())->toJSON((new BarcoModel())->catalogo());
+    }
+
+    /** GET /barco/detalle/{id} */
+    public function detalle($id)
+    {
+        (new Response())->toJSON((new BarcoModel())->detalle($id), 'Barco no encontrado');
+    }
 }

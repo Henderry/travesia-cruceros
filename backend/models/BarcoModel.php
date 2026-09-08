@@ -1,4 +1,4 @@
-    <?php
+<?php
     class BarcoModel
     {
         public $enlace;
@@ -39,7 +39,7 @@
                             b.Nombre,
                             b.Descripcion,
                             b.Capacidad,
-                            b.HabitacionesDispoinbles AS HabitacionesDispoinbles
+                            b.HabitacionesDisponibles AS HabitacionesDisponibles
                         FROM barco b
                         WHERE b.Id = " . intval($id);
 
@@ -92,59 +92,97 @@
 
         public function create($objeto)
         {
+            $this->enlace->beginTransaction();
             try {
-                // Insertar el barco sin HabitacionesDisponibles
-                $sql = "INSERT INTO barco (Nombre, Descripcion, Capacidad) 
-                        VALUES ('$objeto->Nombre', '$objeto->Descripcion', $objeto->Capacidad)";
-                
-                $idBarco = $this->enlace->executeSQL_DML_last($sql);
-        
-                // Insertar las habitaciones en la tabla barco_habitacion
-                if (isset($objeto->habitaciones) && is_array($objeto->habitaciones)) {
-                    foreach ($objeto->habitaciones as $habitacion) {
-                        $sqlHabitacion = "INSERT INTO barco_habitacion (IdBarco, IdHabitacion, CantDisponible) 
-                                          VALUES ($idBarco, {$habitacion->IdHabitacion}, {$habitacion->CantDisponible})";
-                        $this->enlace->executeSQL_DML($sqlHabitacion);
-                    }
-                }
-        
-                return $this->get($idBarco);
-        
+                $idBarco = $this->enlace->ejecutar(
+                    "INSERT INTO barco (Nombre, Descripcion, Capacidad) VALUES (?, ?, ?)",
+                    [trim($objeto->Nombre), trim($objeto->Descripcion ?? ''), (int) $objeto->Capacidad]
+                )['id'];
+                $this->guardarHabitaciones($idBarco, $objeto->habitaciones ?? []);
+                $this->enlace->commit();
             } catch (Exception $e) {
+                $this->enlace->rollback();
                 handleException($e);
             }
+            return $this->get($idBarco);
+        }
+
+        private function guardarHabitaciones($idBarco, $habitaciones)
+        {
+            $this->enlace->ejecutar("DELETE FROM barco_habitacion WHERE IdBarco = ?", [(int) $idBarco]);
+            foreach ($habitaciones as $h) {
+                $this->enlace->ejecutar(
+                    "INSERT INTO barco_habitacion (IdBarco, IdHabitacion, CantDisponible) VALUES (?, ?, ?)",
+                    [(int) $idBarco, (int) $h->IdHabitacion, (int) $h->CantDisponible]
+                );
+            }
+            $this->enlace->ejecutar(
+                "UPDATE barco SET HabitacionesDisponibles =
+                    (SELECT COALESCE(SUM(CantDisponible), 0) FROM barco_habitacion WHERE IdBarco = ?)
+                 WHERE Id = ?",
+                [(int) $idBarco, (int) $idBarco]
+            );
         }
 
     public function update($objeto)
     {
+        $this->enlace->beginTransaction();
         try {
-            $sql = "UPDATE barco SET 
-                    Nombre = '$objeto->Nombre',
-                    Descripcion = '$objeto->Descripcion',
-                    Capacidad = $objeto->Capacidad,
-                    HabitacionesDispoinbles = $objeto->HabitacionesDispoinbles
-                    WHERE Id = $objeto->Id";
-
-            $this->enlace->executeSQL_DML($sql);
-
+            $this->enlace->ejecutar(
+                "UPDATE barco SET Nombre = ?, Descripcion = ?, Capacidad = ? WHERE Id = ?",
+                [trim($objeto->Nombre), trim($objeto->Descripcion ?? ''), (int) $objeto->Capacidad, (int) $objeto->Id]
+            );
             if (isset($objeto->habitaciones) && is_array($objeto->habitaciones)) {
-                $vSql="DELETE from barco_habitacion where IdBarco = $objeto->Id";
-                $this->enlace->executeSQL_DML($vSql);
-                foreach ($objeto->habitaciones as $habitacion) {
-                    $sqlHabitacion = "INSERT INTO barco_habitacion (IdBarco, IdHabitacion, CantDisponible) 
-                                      VALUES ($objeto->Id, {$habitacion->IdHabitacion}, {$habitacion->CantDisponible})";
-                    $this->enlace->executeSQL_DML($sqlHabitacion);
-                }
+                $this->guardarHabitaciones($objeto->Id, $objeto->habitaciones);
             }
-
-
-
-            return $this->get($objeto->Id);
-
+            $this->enlace->commit();
         } catch (Exception $e) {
+            $this->enlace->rollback();
             handleException($e);
         }
+        return $this->get($objeto->Id);
     }
 
+    /** Listado público con total de camarotes y cruceros asignados */
+    public function catalogo()
+    {
+        $barcos = $this->enlace->consultar(
+            "SELECT b.Id, b.Nombre, b.Descripcion, b.Capacidad,
+                    COALESCE(SUM(bh.CantDisponible), 0) AS Camarotes,
+                    (SELECT COUNT(*) FROM crucero c WHERE c.IdBarco = b.Id) AS Cruceros,
+                    (SELECT c.Foto FROM crucero c WHERE c.IdBarco = b.Id ORDER BY c.Id LIMIT 1) AS Foto
+             FROM barco b LEFT JOIN barco_habitacion bh ON bh.IdBarco = b.Id
+             GROUP BY b.Id, b.Nombre, b.Descripcion, b.Capacidad
+             ORDER BY b.Nombre"
+        );
+        return $barcos;
     }
-    ?>
+
+    /** Detalle público: camarotes por tipo y cruceros que opera */
+    public function detalle($id)
+    {
+        $b = $this->enlace->consultarUno(
+            "SELECT Id, Nombre, Descripcion, Capacidad, HabitacionesDisponibles FROM barco WHERE Id = ?",
+            [(int) $id]
+        );
+        if (!$b) {
+            return null;
+        }
+        $b->Habitaciones = $this->enlace->consultar(
+            "SELECT h.Id, h.Tipo, h.Descripcion, h.Tamano, h.MinHuespedes, h.MaxHuespedes,
+                    h.Precio, bh.CantDisponible
+             FROM barco_habitacion bh JOIN habitacion h ON h.Id = bh.IdHabitacion
+             WHERE bh.IdBarco = ? ORDER BY h.Precio",
+            [(int) $id]
+        );
+        $b->Cruceros = $this->enlace->consultar(
+            "SELECT c.Id, c.Nombre, c.Foto,
+                    (SELECT MIN(FechaSalida) FROM fechascrucero f
+                      WHERE f.IdCrucero = c.Id AND f.FechaSalida > CURDATE()) AS ProximaSalida
+             FROM crucero c WHERE c.IdBarco = ? ORDER BY c.Nombre",
+            [(int) $id]
+        );
+        $b->Foto = $b->Cruceros ? $b->Cruceros[0]->Foto : null;
+        return $b;
+    }
+}

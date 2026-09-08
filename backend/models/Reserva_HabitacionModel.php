@@ -1,5 +1,5 @@
 <?php
-class ReservaHabitacion
+class Reserva_HabitacionModel
 {
     public $enlace;
 
@@ -32,4 +32,3 @@ class ReservaHabitacion
         }
     }
 }
-?>

@@ -92,65 +92,61 @@ class CruceroModel
             handleException($e);
         }
     }
+    /**
+     * Crea un crucero con su itinerario, salidas y tarifas en una transacción.
+     */
     public function create($objeto)
     {
+        $db = $this->enlace;
+        $db->beginTransaction();
         try {
-            // 1. Insertar crucero (usando parámetros seguros)
-            $vSql = "INSERT INTO crucero (Nombre, Foto, IdBarco) 
-                     VALUES (
-                       " . $this->enlace->executeSQL("SELECT QUOTE('$objeto->Nombre') AS result")[0]->result . ",
-                       " . $this->enlace->executeSQL("SELECT QUOTE('$objeto->Foto') AS result")[0]->result . ",
-                       " . intval($objeto->IdBarco) . "
-                     )";
-            $idCrucero = $this->enlace->executeSQL_DML_last($vSql);
-
-            // 2. Insertar itinerario
-            foreach ($objeto->itinerario as $dia) {
-                // Se asegura de escapar la descripción
-                $descripcionSegura = $this->enlace->executeSQL("SELECT QUOTE('$dia->Descripcion') AS result")[0]->result;
-                // Se espera que $dia->Dia venga en el payload
-                $vSql = "INSERT INTO itinerario 
-                         (IdCrucero, IdPuerto, Descripcion, Fecha) 
-                         VALUES (
-                            $idCrucero,
-                            " . intval($dia->IdPuerto) . ",
-                            $descripcionSegura,
-                            " . intval($dia->Dia) . "
-                         )";
-                $this->enlace->executeSQL_DML($vSql);
+            $idCrucero = $db->ejecutar(
+                "INSERT INTO crucero (Nombre, Foto, IdBarco) VALUES (?, ?, ?)",
+                [trim($objeto->Nombre), $objeto->Foto ?? 'default.jpg', (int) $objeto->IdBarco]
+            )['id'];
+            $this->guardarItinerario($idCrucero, $objeto->itinerario ?? []);
+            foreach (($objeto->fechas ?? []) as $fecha) {
+                $this->insertarSalida($idCrucero, $fecha);
             }
-
-            // 3. Insertar fechas y precios
-            foreach ($objeto->fechas as $fecha) {
-                // Insertar la fecha del crucero
-                $vSql = "INSERT INTO fechascrucero 
-                         (IdCrucero, FechaSalida, FechaLimitePago, CantDias) 
-                         VALUES (
-                            $idCrucero,
-                            '" . $fecha->FechaSalida . "',
-                            '" . $fecha->FechaLimitePago . "',
-                            " . intval($fecha->CantDias) . "
-                         )";
-                $fechaId = $this->enlace->executeSQL_DML_last($vSql);
-
-                // Insertar precios para esta fecha
-                foreach ($fecha->Precios as $Precio) {
-                    $vSql = "INSERT INTO precio_habitacion_crucero 
-                             (IdFechasCrucero, IdHabitacion, Precio) 
-                             VALUES (
-                               $fechaId,
-                               " . intval($Precio->IdHabitacion) . ",
-                               " . floatval($Precio->Precio) . "
-                             )";
-                    $this->enlace->executeSQL_DML($vSql);
-                }
-            }
-
-            // Devuelve el objeto insertado (consulta por id)
-            return $this->get($idCrucero);
+            $db->commit();
         } catch (Exception $e) {
+            $db->rollback();
             handleException($e);
-            return null;
+        }
+        return $this->get($idCrucero);
+    }
+
+    private function guardarItinerario($idCrucero, $itinerario)
+    {
+        $this->enlace->ejecutar("DELETE FROM itinerario WHERE IdCrucero = ?", [(int) $idCrucero]);
+        foreach ($itinerario as $dia) {
+            // El formulario de creación envía "Dia" y el de edición "Fecha"
+            $numeroDia = (int) ($dia->Dia ?? $dia->Fecha ?? 0);
+            $this->enlace->ejecutar(
+                "INSERT INTO itinerario (IdCrucero, IdPuerto, Descripcion, Fecha) VALUES (?, ?, ?, ?)",
+                [(int) $idCrucero, (int) $dia->IdPuerto, trim($dia->Descripcion ?? ''), $numeroDia]
+            );
+        }
+    }
+
+    private function insertarSalida($idCrucero, $fecha)
+    {
+        $idFecha = $this->enlace->ejecutar(
+            "INSERT INTO fechascrucero (IdCrucero, FechaSalida, FechaLimitePago, CantDias) VALUES (?, ?, ?, ?)",
+            [(int) $idCrucero, $fecha->FechaSalida, $fecha->FechaLimitePago, (int) $fecha->CantDias]
+        )['id'];
+        $this->guardarTarifas($idFecha, $fecha->Precios ?? []);
+        return $idFecha;
+    }
+
+    private function guardarTarifas($idFecha, $precios)
+    {
+        $this->enlace->ejecutar("DELETE FROM precio_habitacion_crucero WHERE IdFechasCrucero = ?", [(int) $idFecha]);
+        foreach ($precios as $p) {
+            $this->enlace->ejecutar(
+                "INSERT INTO precio_habitacion_crucero (IdFechasCrucero, IdHabitacion, Precio) VALUES (?, ?, ?)",
+                [(int) $idFecha, (int) $p->IdHabitacion, (float) $p->Precio]
+            );
         }
     }
 
@@ -208,76 +204,151 @@ class CruceroModel
             handleException($e);
         }
     }
+    /**
+     * Actualiza el crucero sin romper las reservas existentes:
+     * las salidas se sincronizan por fecha (se actualizan, se agregan o se
+     * eliminan), y una salida con reservas no se puede eliminar.
+     */
     public function update($objeto)
-{
-    try {
-        // 1. Escapar valores sensibles usando QUOTE()
-        $nombreSeguro = $this->enlace->executeSQL("SELECT QUOTE('$objeto->Nombre') AS result")[0]->result;
+    {
+        $db = $this->enlace;
+        $id = (int) $objeto->Id;
+        $db->beginTransaction();
+        try {
+            $campos = "Nombre = ?, IdBarco = ?";
+            $valores = [trim($objeto->Nombre), (int) $objeto->IdBarco];
+            if (!empty($objeto->Foto)) {
+                $campos .= ", Foto = ?";
+                $valores[] = $objeto->Foto;
+            }
+            $valores[] = $id;
+            $db->ejecutar("UPDATE crucero SET $campos WHERE Id = ?", $valores);
 
-        // 2. Construir la consulta de actualización base
-        $updateFields = "Nombre = $nombreSeguro, IdBarco = " . intval($objeto->IdBarco);
+            $this->guardarItinerario($id, $objeto->itinerario ?? []);
 
-        // Solo actualizar Foto si se proporciona un valor no vacío
-        if (isset($objeto->Foto) && !empty($objeto->Foto)) {
-            $fotoSegura = $this->enlace->executeSQL("SELECT QUOTE('$objeto->Foto') AS result")[0]->result;
-            $updateFields .= ", Foto = $fotoSegura";
+            $existentes = [];
+            foreach ($db->consultar("SELECT Id, FechaSalida FROM fechascrucero WHERE IdCrucero = ?", [$id]) as $f) {
+                $existentes[$f->FechaSalida] = (int) $f->Id;
+            }
+            $enviadas = [];
+            foreach (($objeto->fechas ?? []) as $fecha) {
+                $enviadas[] = $fecha->FechaSalida;
+                if (isset($existentes[$fecha->FechaSalida])) {
+                    $idFecha = $existentes[$fecha->FechaSalida];
+                    $db->ejecutar(
+                        "UPDATE fechascrucero SET FechaLimitePago = ?, CantDias = ? WHERE Id = ?",
+                        [$fecha->FechaLimitePago, (int) $fecha->CantDias, $idFecha]
+                    );
+                    $this->guardarTarifas($idFecha, $fecha->Precios ?? []);
+                } else {
+                    $this->insertarSalida($id, $fecha);
+                }
+            }
+            foreach ($existentes as $fechaSalida => $idFecha) {
+                if (in_array($fechaSalida, $enviadas, true)) {
+                    continue;
+                }
+                $conReservas = $db->consultarUno("SELECT COUNT(*) AS n FROM reserva WHERE IdFechaCrucero = ?", [$idFecha]);
+                if ($conReservas && (int) $conReservas->n > 0) {
+                    throw new Exception("No se puede eliminar la salida del $fechaSalida porque tiene reservas");
+                }
+                $db->ejecutar("DELETE FROM precio_habitacion_crucero WHERE IdFechasCrucero = ?", [$idFecha]);
+                $db->ejecutar("DELETE FROM fechascrucero WHERE Id = ?", [$idFecha]);
+            }
+            $db->commit();
+        } catch (Exception $e) {
+            $db->rollback();
+            Auth::responder(409, $e->getMessage());
         }
+        return $this->get($id);
+    }
 
-        // 3. Ejecutar la actualización en la tabla crucero
-        $vSql = "UPDATE crucero SET $updateFields WHERE Id = " . intval($objeto->Id);
-        $this->enlace->executeSQL_DML($vSql);
-
-        // 4. Actualizar itinerario: eliminar existente y reinsertar
-        $this->enlace->executeSQL_DML("DELETE FROM itinerario WHERE IdCrucero = " . intval($objeto->Id));
-        foreach ($objeto->itinerario as $dia) {
-            $descripcionSegura = $this->enlace->executeSQL("SELECT QUOTE('$dia->Descripcion') AS result")[0]->result;
-            $vSql = "INSERT INTO itinerario 
-                     (IdCrucero, IdPuerto, Descripcion, Fecha) 
-                     VALUES (
-                        " . intval($objeto->Id) . ",
-                        " . intval($dia->IdPuerto) . ",
-                        $descripcionSegura,
-                        " . intval($dia->Fecha) . "
-                     )";
-            $this->enlace->executeSQL_DML($vSql);
+    /**
+     * Catálogo público: cada crucero con su barco, próxima salida,
+     * precio desde, cantidad de salidas y destinos del itinerario.
+     */
+    public function catalogo()
+    {
+        $db = $this->enlace;
+        $cruceros = $db->consultar(
+            "SELECT c.Id, c.Nombre, c.Foto, c.IdBarco, b.Nombre AS NombreBarco,
+                    (SELECT MIN(fc.FechaSalida) FROM fechascrucero fc
+                      WHERE fc.IdCrucero = c.Id AND fc.FechaSalida > CURDATE()) AS ProximaSalida,
+                    (SELECT COUNT(*) FROM fechascrucero fc
+                      WHERE fc.IdCrucero = c.Id AND fc.FechaSalida > CURDATE()) AS Salidas,
+                    (SELECT MIN(phc.Precio) FROM precio_habitacion_crucero phc
+                       JOIN fechascrucero fc ON fc.Id = phc.IdFechasCrucero
+                      WHERE fc.IdCrucero = c.Id AND fc.FechaSalida > CURDATE()) AS PrecioDesde
+             FROM crucero c LEFT JOIN barco b ON b.Id = c.IdBarco
+             ORDER BY (ProximaSalida IS NULL), ProximaSalida"
+        );
+        foreach ($cruceros as $c) {
+            $c->CantDias = null;
+            if ($c->ProximaSalida) {
+                $f = $db->consultarUno(
+                    "SELECT CantDias FROM fechascrucero WHERE IdCrucero = ? AND FechaSalida = ? LIMIT 1",
+                    [(int) $c->Id, $c->ProximaSalida]
+                );
+                $c->CantDias = $f ? (int) $f->CantDias : null;
+            }
+            $destinos = $db->consultar(
+                "SELECT DISTINCT d.Pais, d.Region FROM itinerario i
+                   JOIN puerto p ON p.Id = i.IdPuerto JOIN destino d ON d.Id = p.IdDestino
+                  WHERE i.IdCrucero = ? ORDER BY d.Pais",
+                [(int) $c->Id]
+            );
+            $c->Destinos = array_values(array_unique(array_map(fn($d) => $d->Pais, $destinos)));
+            $c->Paradas = count($db->consultar("SELECT Id FROM itinerario WHERE IdCrucero = ?", [(int) $c->Id]));
+            $c->PrecioDesde = $c->PrecioDesde !== null ? (float) $c->PrecioDesde : null;
         }
+        return $cruceros;
+    }
 
-        // 5. Actualizar fechas y precios: eliminar existente y reinsertar
-        $this->enlace->executeSQL_DML("DELETE FROM fechascrucero WHERE IdCrucero = " . intval($objeto->Id));
-        foreach ($objeto->fechas as $fecha) {
-            $vSql = "INSERT INTO fechascrucero 
-                     (IdCrucero, FechaSalida, FechaLimitePago, CantDias) 
-                     VALUES (
-                        " . intval($objeto->Id) . ",
-                        '" . $fecha->FechaSalida . "',
-                        '" . $fecha->FechaLimitePago . "',
-                        " . intval($fecha->CantDias) . "
-                     )";
-            $fechaId = $this->enlace->executeSQL_DML_last($vSql);
-
-            foreach ($fecha->Precios as $precio) {
-                $vSql = "INSERT INTO precio_habitacion_crucero 
-                         (IdFechasCrucero, IdHabitacion, Precio) 
-                         VALUES (
-                            " . intval($fechaId) . ",
-                            " . intval($precio->IdHabitacion) . ",
-                            " . floatval($precio->Precio) . "
-                         )";
-                $this->enlace->executeSQL_DML($vSql);
+    /**
+     * Detalle público de un crucero: barco, itinerario ordenado y salidas
+     * futuras con la tarifa de cada tipo de camarote.
+     */
+    public function detalle($id)
+    {
+        $db = $this->enlace;
+        $c = $db->consultarUno(
+            "SELECT c.Id, c.Nombre, c.Foto, c.IdBarco, b.Nombre AS NombreBarco,
+                    b.Descripcion AS DescripcionBarco, b.Capacidad
+             FROM crucero c LEFT JOIN barco b ON b.Id = c.IdBarco WHERE c.Id = ?",
+            [(int) $id]
+        );
+        if (!$c) {
+            return null;
+        }
+        $c->Itinerario = $db->consultar(
+            "SELECT i.Id, i.Fecha AS Dia, i.Descripcion, p.Nombre AS Puerto, d.Pais, d.Region
+             FROM itinerario i JOIN puerto p ON p.Id = i.IdPuerto JOIN destino d ON d.Id = p.IdDestino
+             WHERE i.IdCrucero = ? ORDER BY i.Fecha",
+            [(int) $id]
+        );
+        $c->Salidas = $db->consultar(
+            "SELECT Id, FechaSalida, FechaLimitePago, CantDias,
+                    DATE_ADD(FechaSalida, INTERVAL CantDias DAY) AS FechaRegreso
+             FROM fechascrucero WHERE IdCrucero = ? AND FechaSalida > CURDATE()
+             ORDER BY FechaSalida",
+            [(int) $id]
+        );
+        foreach ($c->Salidas as $s) {
+            $s->Tarifas = $db->consultar(
+                "SELECT h.Id AS IdHabitacion, h.Tipo, h.Descripcion, h.Tamano,
+                        h.MinHuespedes, h.MaxHuespedes, phc.Precio
+                 FROM precio_habitacion_crucero phc JOIN habitacion h ON h.Id = phc.IdHabitacion
+                 WHERE phc.IdFechasCrucero = ? ORDER BY phc.Precio",
+                [(int) $s->Id]
+            );
+        }
+        $precios = [];
+        foreach ($c->Salidas as $s) {
+            foreach ($s->Tarifas as $t) {
+                $precios[] = (float) $t->Precio;
             }
         }
-
-        // Retornar el registro actualizado
-        return $this->get($objeto->Id);
-    } catch (Exception $e) {
-        handleException($e);
-        return null;
+        $c->PrecioDesde = $precios ? min($precios) : null;
+        return $c;
     }
-}
-
-   
-
-
-
-    
 }

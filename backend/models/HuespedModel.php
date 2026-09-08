@@ -1,5 +1,5 @@
 <?php
-class Huesped
+class HuespedModel
 {
     public $enlace;
 
@@ -30,4 +30,3 @@ class Huesped
         }
     }
 }
-?>

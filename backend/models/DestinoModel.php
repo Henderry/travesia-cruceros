@@ -1,5 +1,5 @@
 <?php
-class Destino
+class DestinoModel
 {
     public $enlace;
 
@@ -30,4 +30,3 @@ class Destino
         }
     }
 }
-?>

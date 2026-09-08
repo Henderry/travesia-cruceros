@@ -123,4 +123,16 @@ class Crucero
             handleException($e);
         }
     }
+
+    /** GET /Crucero/catalogo — listado público enriquecido */
+    public function catalogo()
+    {
+        (new Response())->toJSON((new CruceroModel())->catalogo());
+    }
+
+    /** GET /Crucero/detalle/{id} */
+    public function detalle($id)
+    {
+        (new Response())->toJSON((new CruceroModel())->detalle($id), 'Crucero no encontrado');
+    }
 }

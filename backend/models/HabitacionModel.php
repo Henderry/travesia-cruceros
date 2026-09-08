@@ -52,36 +52,38 @@ class HabitacionModel
         }
     }
   
-    public function create($objeto) {
-        try {
-            $sql = "INSERT INTO habitacion (Descripcion, MinHusoedes, Tamano, Tipo, Precio, Disponibilidad, MaxHuespedes) 
-                    VALUES ('$objeto->Descripcion', $objeto->MinHusoedes, $objeto->Tamano, '$objeto->Tipo', $objeto->Precio, $objeto->Disponibilidad, $objeto->MaxHuespedes)";
-            
-            $idHabitacion = $this->enlace->executeSQL_DML_last($sql);
-            return $this->get($idHabitacion);
-
-        } catch (Exception $e) {
-            handleException($e);
-        }
+    private function valores($o)
+    {
+        return [
+            trim($o->Descripcion ?? ''),
+            (int) ($o->MinHuespedes ?? 1),
+            (float) ($o->Tamano ?? 0),
+            trim($o->Tipo ?? ''),
+            (float) ($o->Precio ?? 0),
+            (int) ($o->Disponibilidad ?? 1),
+            (int) ($o->MaxHuespedes ?? 1),
+        ];
     }
-    public function update($objeto) {
-        try {
-            $sql = "UPDATE habitacion SET 
-                    Descripcion = '$objeto->Descripcion',
-                    MinHusoedes = $objeto->MinHusoedes,
-                    Tamano = $objeto->Tamano,
-                    Tipo = '$objeto->Tipo',
-                    Precio = $objeto->Precio,
-                    Disponibilidad = $objeto->Disponibilidad,
-                    MaxHuespedes = $objeto->MaxHuespedes
-                    WHERE Id = $objeto->Id";
 
-            $this->enlace->executeSQL_DML($sql);
-            return $this->get($objeto->Id);
+    public function create($objeto)
+    {
+        $res = $this->enlace->ejecutar(
+            "INSERT INTO habitacion (Descripcion, MinHuespedes, Tamano, Tipo, Precio, Disponibilidad, MaxHuespedes)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            $this->valores($objeto)
+        );
+        return $this->get($res['id']);
+    }
 
-        } catch (Exception $e) {
-            handleException($e);
-        }
+    public function update($objeto)
+    {
+        $this->enlace->ejecutar(
+            "UPDATE habitacion SET Descripcion = ?, MinHuespedes = ?, Tamano = ?, Tipo = ?,
+                    Precio = ?, Disponibilidad = ?, MaxHuespedes = ?
+             WHERE Id = ?",
+            array_merge($this->valores($objeto), [(int) $objeto->Id])
+        );
+        return $this->get($objeto->Id);
     }
  
 }
