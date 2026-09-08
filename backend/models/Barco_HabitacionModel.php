@@ -1,5 +1,5 @@
 <?php
-class BarcoHabitacion
+class Barco_HabitacionModel
 {
     public $enlace;
 
@@ -34,4 +34,3 @@ class BarcoHabitacion
         }
     }
 }
-?>

@@ -1,5 +1,5 @@
 <?php
-class RolUsuario
+class RolesUsuarioModel
 {
     public $enlace;
 
@@ -63,4 +63,3 @@ class RolUsuarioModel
         }
     }
 }
-?>

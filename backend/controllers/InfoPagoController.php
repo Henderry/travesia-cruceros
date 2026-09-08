@@ -1,57 +1,42 @@
 <?php
-//localhost:81/crucero/InfoPago
 class InfoPagoC
 {
-    //GET listar
+    /** GET /InfoPagoC — solo administradores */
     public function index()
     {
-        try {
-            $response = new Response();
-            //Instancia modelo
-            $InfoPagoM = new InfoPagoModel;
-            //Método del modelo
-            $result = $InfoPagoM->all();
-            //Dar respuesta
-            $response->toJSON($result);
-        } catch (Exception $e) {
-            handleException($e);
-        }
+        Auth::requerirAdmin();
+        (new Response())->toJSON((new InfoPagoModel())->all());
     }
-    //GET Obtener 
+
     public function get($id)
     {
-        try {
-            $response = new Response();
-            //Instancia del modelo
-            $InfoPago = new InfoPagoModel();
-            //Acción del modelo a ejecutar
-            $result = $InfoPago->get($id);
-            //Dar respuesta
-            $response->toJSON($result);
-        } catch (Exception $e) {
-            handleException($e);
-        }
+        Auth::requerirAdmin();
+        (new Response())->toJSON((new InfoPagoModel())->get($id), 'Pago no encontrado');
     }
+
+    /**
+     * POST /InfoPagoC  { IdReserva }
+     * Registra el pago de una reserva del usuario autenticado (o de cualquiera si es admin).
+     * La tarjeta se valida en el frontend y no se almacena.
+     */
     public function create()
     {
-        try {
-            $response = new Response();
-            $data = json_decode(file_get_contents('php://input'), true);
-            
-            // Validar ID reserva
-            if(!isset($data['IdReserva']) || empty($data['IdReserva'])) {
-                throw new Exception("ID de reserva requerido");
-            }
+        $usuario = Auth::requerirLogin();
+        $datos = (new Request())->getJSON();
+        $idReserva = (int) ($datos->IdReserva ?? 0);
 
-            $model = new InfoPagoModel();
-            $result = $model->create($data['IdReserva']);
-            
-            $response->toJSON(["success" => true, "message" => "Pago registrado"]);
-            
-        } catch (Exception $e) {
-            handleException($e);
+        $reserva = (new ReservaModel())->get($idReserva);
+        if (!$reserva) {
+            Auth::responder(404, 'La reserva no existe');
         }
+        if (!Auth::esAdmin() && (int) $reserva->IdUsuario !== $usuario->id) {
+            Auth::responder(403, 'No tiene acceso a esta reserva');
+        }
+        $model = new InfoPagoModel();
+        if ($model->yaPagada($idReserva)) {
+            Auth::responder(409, 'Esta reserva ya está pagada');
+        }
+        $model->create($idReserva, $reserva->Total);
+        (new Response())->toJSON(['success' => true, 'message' => 'Pago registrado', 'Monto' => $reserva->Total]);
     }
- 
-
 }

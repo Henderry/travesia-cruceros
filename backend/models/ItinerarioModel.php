@@ -1,5 +1,5 @@
-    <?php
-    class Itinerario
+<?php
+    class ItinerarioModel
     {
         public $enlace;
 
@@ -34,4 +34,3 @@
             }
         }
     }
-    ?>

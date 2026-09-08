@@ -10,19 +10,16 @@ class Response
         return $this;
     }
     
-    public function toJSON($response = [],$message="")
+    public function toJSON($response = [], $message = "")
     {
-        //Verificar respuesta
-        if (isset($response) && !empty($response)) {
-            $json = $response;
+        // Un arreglo vacío es válido; solo null/false es "no encontrado".
+        if ($response === null || $response === false) {
+            $this->status = 404;
+            $json = ['status' => 404, 'message' => $message ?: 'Recurso no encontrado'];
         } else {
-            $this->status =400;
-            $json =  $message ?? "No se efectuo la solicitud";
+            $json = $response;
         }
-        //Escribir respuesta JSON con código de estado HTTP
-        echo json_encode(
-            $json,
-            http_response_code($this->status)
-        );
+        http_response_code($this->status);
+        echo json_encode($json, JSON_UNESCAPED_UNICODE);
     }
 }

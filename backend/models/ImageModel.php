@@ -13,7 +13,7 @@ class ImageModel
     public function uploadFile($object) {
         try {
             $file = $object['file'];
-            $Id_crucero = $object['Id_Crucero'];
+            $Id_crucero = (int) $object['Id_Crucero'];
             
             $fileName = $file['name'];
             $tempPath = $file['tmp_name'];

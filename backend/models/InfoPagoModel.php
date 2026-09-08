@@ -1,56 +1,35 @@
 <?php
 class InfoPagoModel
 {
-    public $enlace;
+    private $db;
 
     public function __construct()
     {
-        $this->enlace = new MySqlConnect();
+        $this->db = new MySqlConnect();
     }
 
     public function all()
     {
-        try {
-            $vSql = "SELECT * FROM infopago;";
-            $vResultado = $this->enlace->ExecuteSQL($vSql);
-            return $vResultado;
-        } catch (Exception $e) {
-            handleException($e);
-        }
+        return $this->db->consultar("SELECT * FROM infopago ORDER BY Fecha DESC");
     }
 
     public function get($id)
     {
-        try {
-            $vSql = "SELECT * FROM infopago WHERE Id = " . intval($id) . ";";
-            $vResultado = $this->enlace->ExecuteSQL($vSql);
-            return $vResultado;
-        } catch (Exception $e) {
-            handleException($e);
-        }
+        return $this->db->consultarUno("SELECT * FROM infopago WHERE Id = ?", [(int) $id]);
     }
 
-    public function create($idReserva)
+    public function yaPagada($idReserva)
     {
-        try {
-            // Validar existencia de la reserva
-            $vSql = "SELECT Id FROM reserva WHERE Id = " . intval($idReserva);
-            $existeReserva = $this->enlace->ExecuteSQL($vSql);
-            
-            if(empty($existeReserva)) {
-                throw new Exception("Reserva no encontrada");
-            }
-    
-            // Insertar en infopago (CORRECCIÓN: FechaPago -> Fecha)
-            $vSql = "INSERT INTO infopago (IdReserva, Fecha) 
-                   VALUES (".intval($idReserva).", CURDATE())";
-            
-            $this->enlace->executeSQL_DML($vSql);
-            return true;
-            
-        } catch (Exception $e) {
-            handleException($e);
-        }
+        return (bool) $this->db->consultarUno("SELECT Id FROM infopago WHERE IdReserva = ?", [(int) $idReserva]);
+    }
+
+    /** Registra el pago total (subtotal + IVA) de la reserva */
+    public function create($idReserva, $monto)
+    {
+        $this->db->ejecutar(
+            "INSERT INTO infopago (IdReserva, Fecha, Monto) VALUES (?, CURDATE(), ?)",
+            [(int) $idReserva, (float) $monto]
+        );
+        return true;
     }
 }
-?>

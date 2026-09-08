@@ -1,38 +1,52 @@
 <?php
-//localhost:81/crucero/Complemento
 class ComplementoC
 {
-    //GET listar
     public function index()
     {
-        try {
-            $response = new Response();
-            //Instancia modelo
-            $ComplementoM = new ComplementoModel;
-            //Método del modelo
-            $result = $ComplementoM->all();
-            //Dar respuesta
-            $response->toJSON($result);
-        } catch (Exception $e) {
-            handleException($e);
-        }
+        (new Response())->toJSON((new ComplementoModel())->all());
     }
-    //GET Obtener 
+
     public function get($id)
     {
-        try {
-            $response = new Response();
-            //Instancia del modelo
-            $Complemento = new ComplementoModel();
-            //Acción del modelo a ejecutar
-            $result = $Complemento->get($id);
-            //Dar respuesta
-            $response->toJSON($result);
-        } catch (Exception $e) {
-            handleException($e);
-        }
+        (new Response())->toJSON((new ComplementoModel())->get($id), 'Complemento no encontrado');
     }
-    
- 
 
+    public function create()
+    {
+        $d = $this->validar((new Request())->getJSON());
+        http_response_code(201);
+        echo json_encode((new ComplementoModel())->create($d), JSON_UNESCAPED_UNICODE);
+    }
+
+    public function update($id = null)
+    {
+        $d = $this->validar((new Request())->getJSON());
+        if ($id) {
+            $d->Id = (int) $id;
+        }
+        if (empty($d->Id)) {
+            Auth::responder(422, 'Falta el identificador del complemento');
+        }
+        (new Response())->toJSON((new ComplementoModel())->update($d));
+    }
+
+    public function delete($id = null)
+    {
+        (new Response())->toJSON((new ComplementoModel())->delete($id));
+    }
+
+    private function validar($d)
+    {
+        if (!$d || mb_strlen(trim($d->Descripcion ?? '')) < 3) {
+            Auth::responder(422, 'La descripción es obligatoria');
+        }
+        if (!is_numeric($d->Precio ?? null) || !is_numeric($d->PrecioAplicado ?? null)
+            || $d->Precio < 0 || $d->PrecioAplicado < 0) {
+            Auth::responder(422, 'Los precios deben ser números positivos');
+        }
+        if ($d->PrecioAplicado > $d->Precio) {
+            Auth::responder(422, 'El precio aplicado no puede ser mayor que el precio regular');
+        }
+        return $d;
+    }
 }
