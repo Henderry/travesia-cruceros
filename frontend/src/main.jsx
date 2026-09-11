@@ -1,122 +1,92 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import "./index.css";
-import App from "./App.jsx";
-import { createBrowserRouter } from "react-router-dom";
-import { Home } from "./components/Home/Home";
-import { RouterProvider } from "react-router";
-import { PageNotFound } from "./components/Home/PageNotFound";
-import { ListHabitacion } from "./components/Movie/ListHabitacion";
-import { DetailHabitacion } from "./components/Movie/DetailHabitacion";
-import { ListBarco } from "./components/Movie/ListBarco";
-import { DetailBarco } from "./components/Movie/DetailBarco";
-import { ListCrucero } from "./components/Movie/ListCrucero";
-import { DetailCrucero } from "./components/Movie/DetailCrucero";
-import { ListReserva } from "./components/Movie/ListReserva";
-import { DetailReserva } from "./components/Movie/DetailReserva";
-import { CreateHabitacion } from "./components/Movie/CreateHabitacion";
-import { UpdateHabitacion } from "./components/Movie/UpdateHabitacion";
-import TableHabitacion from "./components/Movie/TableHabitacion";
-import TableBarco from "./components/Movie/TableBarco";
-import { CreateBarco } from "./components/Movie/CreateBarco";
-import { UpdateBarco } from "./components/Movie/UpdateBarco";
-import TableCrucero from "./components/Movie/TableCrucero";
-import { CreateCrucero } from "./components/Movie/CreateCrucero";
-import { UpdateCrucero } from "./components/Movie/UpdateCrucero";
-import ReservaForm from "./components/Movie/GestionReserva";
+import { StrictMode, lazy } from 'react';
+import { createRoot } from 'react-dom/client';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import '@fontsource-variable/fraunces';
+import '@fontsource-variable/plus-jakarta-sans';
+import './index.css';
+import './services/api';
+import App from './App.jsx';
+import { Layout } from './components/Layout/Layout';
+import AdminLayout from './components/Layout/AdminLayout';
+import RutaProtegida from './components/Layout/RutaProtegida';
 
+import Home from './pages/Home';
+import Cruceros from './pages/Cruceros';
+import CruceroDetalle from './pages/CruceroDetalle';
+import Barcos from './pages/Barcos';
+import BarcoDetalle from './pages/BarcoDetalle';
+import Camarotes from './pages/Camarotes';
+import Login from './pages/Login';
+import Registro from './pages/Registro';
+import Reservar from './pages/Reservar';
+import MisReservas from './pages/MisReservas';
+import ReservaDetalle from './pages/ReservaDetalle';
+import NoEncontrado from './pages/NoEncontrado';
 
-const rutas=createBrowserRouter(
-  [
-    {
-      element: <App />,
-      children:[
-        {
-          path:'/',
-          element: <Home />
-        },
-        {
-          path: '*',
-          element: <PageNotFound />
-        },
-        {
-          path:'/habitacion/',
-          element: <ListHabitacion />
-        },
-        {
-          path:'/habitacion/:id',
-          element:  <DetailHabitacion/>
-        },
-        {
-          path:'/barco/',
-          element:  <ListBarco/>
-        },
-        {
-          path:'/barco/:id',
-          element:  <DetailBarco/>
-        },
-        {
-          path:'/crucero/',
-          element:  <ListCrucero/>
-        },
-        {
-          path:'/crucero/:id',
-          element:  <DetailCrucero/>
-        },
-        {
-          path:'/reserva/',
-          element:  <ListReserva/>
-        },
-        {
-          path:'/reserva/:id',
-          element:  <DetailReserva/>
-        },
-        {
-          path: '/habitacion/crear',
-          element: <CreateHabitacion/>
-      },
+// El panel de administración se descarga solo cuando un administrador entra
+const Dashboard = lazy(() => import('./pages/admin/Dashboard'));
+const AdminReservas = lazy(() => import('./pages/admin/AdminReservas'));
+const AdminCruceros = lazy(() => import('./pages/admin/AdminCruceros'));
+const AdminBarcos = lazy(() => import('./pages/admin/AdminBarcos'));
+const AdminCamarotes = lazy(() => import('./pages/admin/AdminCamarotes'));
+const AdminComplementos = lazy(() => import('./pages/admin/AdminComplementos'));
+const AdminUsuarios = lazy(() => import('./pages/admin/AdminUsuarios'));
+const AdminFormulario = lazy(() => import('./pages/admin/AdminFormulario'));
+const CreateBarco = lazy(() => import('./components/Crucero/CreateBarco').then((m) => ({ default: m.CreateBarco })));
+const UpdateBarco = lazy(() => import('./components/Crucero/UpdateBarco').then((m) => ({ default: m.UpdateBarco })));
+const CreateCrucero = lazy(() => import('./components/Crucero/CreateCrucero').then((m) => ({ default: m.CreateCrucero })));
+const UpdateCrucero = lazy(() => import('./components/Crucero/UpdateCrucero').then((m) => ({ default: m.UpdateCrucero })));
+const CreateHabitacion = lazy(() => import('./components/Crucero/CreateHabitacion').then((m) => ({ default: m.CreateHabitacion })));
+const UpdateHabitacion = lazy(() => import('./components/Crucero/UpdateHabitacion').then((m) => ({ default: m.UpdateHabitacion })));
+
+const privada = (elemento) => <RutaProtegida>{elemento}</RutaProtegida>;
+
+const rutas = createBrowserRouter([
+  {
+    element: <App />,
+    children: [
       {
-        path: '/habitacion/update/:id',
-        element: <UpdateHabitacion/>
-    },
-    {
-      path: '/habitacion-table',
-      element: <TableHabitacion/>
-  }, {
-    path: '/barco-table',
-    element: <TableBarco/>
-},    {
-  path: '/barco/crear',
-  element: <CreateBarco/>
-},
-{
-path: '/barco/update/:id',
-element: <UpdateBarco/>
-},
-{
-  path: '/crucero-table',
-  element: <TableCrucero/>
-},
-{
-  path: '/crucero/crear',
-  element: <CreateCrucero/>
-},
-{
-  path: '/gestion',
-  element: <ReservaForm/>
-},
-{
-  path: '/crucero/update/:id',
-  element: <UpdateCrucero/>
+        element: <Layout />,
+        children: [
+          { path: '/', element: <Home /> },
+          { path: '/cruceros', element: <Cruceros /> },
+          { path: '/cruceros/:id', element: <CruceroDetalle /> },
+          { path: '/barcos', element: <Barcos /> },
+          { path: '/barcos/:id', element: <BarcoDetalle /> },
+          { path: '/camarotes', element: <Camarotes /> },
+          { path: '/reservar', element: privada(<Reservar />) },
+          { path: '/mis-reservas', element: privada(<MisReservas />) },
+          { path: '/reservas/:id', element: privada(<ReservaDetalle />) },
+          { path: '*', element: <NoEncontrado /> },
+        ],
+      },
+      { path: '/login', element: <Login /> },
+      { path: '/registro', element: <Registro /> },
+      {
+        path: '/admin',
+        element: <RutaProtegida soloAdmin><AdminLayout /></RutaProtegida>,
+        children: [
+          { index: true, element: <Dashboard /> },
+          { path: 'reservas', element: <AdminReservas /> },
+          { path: 'cruceros', element: <AdminCruceros /> },
+          { path: 'cruceros/crear', element: <AdminFormulario volverA="/admin/cruceros"><CreateCrucero /></AdminFormulario> },
+          { path: 'cruceros/editar/:id', element: <AdminFormulario volverA="/admin/cruceros"><UpdateCrucero /></AdminFormulario> },
+          { path: 'barcos', element: <AdminBarcos /> },
+          { path: 'barcos/crear', element: <AdminFormulario volverA="/admin/barcos"><CreateBarco /></AdminFormulario> },
+          { path: 'barcos/editar/:id', element: <AdminFormulario volverA="/admin/barcos"><UpdateBarco /></AdminFormulario> },
+          { path: 'camarotes', element: <AdminCamarotes /> },
+          { path: 'camarotes/crear', element: <AdminFormulario volverA="/admin/camarotes"><CreateHabitacion /></AdminFormulario> },
+          { path: 'camarotes/editar/:id', element: <AdminFormulario volverA="/admin/camarotes"><UpdateHabitacion /></AdminFormulario> },
+          { path: 'complementos', element: <AdminComplementos /> },
+          { path: 'usuarios', element: <AdminUsuarios /> },
+        ],
+      },
+    ],
   },
-    
-      ]
-    }
-  ]
-)
+]);
 
-createRoot(document.getElementById("root")).render(
-  <StrictMode> 
-  <RouterProvider router={rutas} /> 
-</StrictMode>, 
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <RouterProvider router={rutas} />
+  </StrictMode>
 );

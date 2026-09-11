@@ -45,6 +45,16 @@ class CruceroService {
   
   // Actualizar crucero
 
+  // Catálogo público con próxima salida y precio desde
+  catalogo() {
+    return axios.get(`${BASE_URL}/catalogo`);
+  }
+
+  // Detalle público: itinerario y salidas con tarifas
+  detalle(id) {
+    return axios.get(`${BASE_URL}/detalle/${id}`);
+  }
+
 }
 
 export default new CruceroService();
