@@ -25,6 +25,14 @@ class BarcoService {
   updateBarco(barco) {
     return axios.put(BASE_URL, JSON.stringify(barco));
   }
+  catalogo() {
+    return axios.get(`${BASE_URL}/catalogo`);
+  }
+
+  detalle(id) {
+    return axios.get(`${BASE_URL}/detalle/${id}`);
+  }
+
 }
 
 export default new BarcoService();

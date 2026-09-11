@@ -3,14 +3,24 @@ import axios from 'axios';
 const BASE_URL = import.meta.env.VITE_BASE_URL2 + 'ComplementoC';
 
 class ComplementoService {
-  // notar: nombre corregido a getComplementos() (antes había un typo)
   getComplementos() {
-    return axios.get(`${BASE_URL}/index`);  
-    // o `/all` si tu controller mapea así: ComplementoC->index()
+    return axios.get(BASE_URL);
   }
 
   getComplementoById(id) {
-    return axios.get(`${BASE_URL}/get/${id}`);
+    return axios.get(`${BASE_URL}/${id}`);
+  }
+
+  createComplemento(complemento) {
+    return axios.post(BASE_URL, complemento);
+  }
+
+  updateComplemento(complemento) {
+    return axios.put(BASE_URL, complemento);
+  }
+
+  deleteComplemento(id) {
+    return axios.delete(`${BASE_URL}/delete/${id}`);
   }
 }
 
