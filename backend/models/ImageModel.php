@@ -29,21 +29,9 @@ class ImageModel
                     if (!file_exists($this->upload_path . $fileName)) {
                         if ($fileSize < 20000000000 && $fileError == 0) {
                             if (move_uploaded_file($tempPath, $this->upload_path . $fileName)) {
-                                // Consulta corregida:
-                              
                                 $sql = "UPDATE crucero SET Foto = '$fileName' WHERE Id = $Id_crucero";
-                                
-                                $vResultado = $this->enlace->executeSQL_DML($sql);
-                                
-                                
-                                var_dump($object);
-                                die();
-
-                                if ($vResultado > 0) {
-
-                                    return 'Imagen creada';
-                                }
-                                return true;
+                                $this->enlace->executeSQL_DML($sql);
+                                return ['Foto' => $fileName];
                             }
                         }
                     }
