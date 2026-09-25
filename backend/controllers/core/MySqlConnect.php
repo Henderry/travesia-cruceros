@@ -31,7 +31,14 @@ class MySqlConnect {
 			return;
 		}
 		try {
-			$this->link = new mysqli ( $this->host, $this->username, $this->password, $this->dbname );
+			$this->link = mysqli_init();
+			$flags = 0;
+			if (filter_var(Config::get('DB_SSL', false), FILTER_VALIDATE_BOOLEAN)) {
+				$this->link->ssl_set(null, null, Config::get('DB_SSL_CA', '/etc/ssl/certs/ca-certificates.crt'), null, null);
+				$flags = MYSQLI_CLIENT_SSL;
+			}
+			$this->link->real_connect($this->host, $this->username, $this->password, $this->dbname,
+				(int) Config::get('DB_PORT', 3306), null, $flags);
 			$this->link->set_charset('utf8mb4');
 		} catch ( Exception $e ) {
 			handleException($e);
