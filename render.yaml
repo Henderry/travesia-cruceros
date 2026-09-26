@@ -5,15 +5,5 @@ services:
     plan: free
     region: virginia
     envVars:
-      - key: DB_HOST
-        sync: false
-      - key: DB_USERNAME
-        sync: false
-      - key: DB_PASSWORD
-        sync: false
-      - key: DB_DBNAME
-        value: travesia
-      - key: DB_SSL
-        value: "true"
       - key: SECRET_KEY
         generateValue: true

@@ -9,7 +9,7 @@ return [
     'DB_PASSWORD' => getenv('DB_PASSWORD') ?: '',
     'DB_DBNAME'   => getenv('DB_DBNAME')   ?: 'prueba1',
     'DB_PORT'     => getenv('DB_PORT')     ?: 3306,
-    // Conexión cifrada (necesaria en Azure Database for MySQL)
+    // Conexión cifrada, para bases de datos externas
     'DB_SSL'      => getenv('DB_SSL')      ?: false,
     // Clave para firmar los JWT
     'SECRET_KEY'  => getenv('SECRET_KEY')  ?: '82a9e228ad7b7c2c43e80a511a624eb62590cd5f8465945fa42d3037855ecc74',

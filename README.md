@@ -6,7 +6,7 @@ en línea con pago, facturas en PDF para el cliente y un panel de administració
 Proyecto del curso ISW-613 Programación Web (UTN).
 
 **Demo:** https://travesia-cruceros.onrender.com (la primera carga puede tardar cerca de un
-minuto porque el servidor gratuito se suspende sin uso).
+minuto porque el servidor gratuito se suspende sin uso; los datos se reinician con él).
 
 ![Página de inicio](docs/capturas/01-inicio.jpg)
 
@@ -91,11 +91,14 @@ Requisitos: PHP 8 con `mysqli`, MySQL o MariaDB, Composer y Node.js 18 o superio
 
 ## Despliegue
 
-El `Dockerfile` compila el frontend y lo sirve con Apache junto al API en `/api`. Al iniciar,
-`backend/tools/instalar-bd.php` crea la base de datos con `bd.sql` si todavía no existe.
+El `Dockerfile` arma una sola imagen con Apache, PHP y MariaDB: el frontend compilado en `/`,
+el API en `/api` y la base de datos cargada con `bd.sql`. La demo corre en el plan gratuito de
+Render (`render.yaml`), así que los datos vuelven a los de ejemplo cada vez que el servidor se
+reinicia.
 
-Variables de entorno: `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DBNAME`,
-`DB_SSL` y `SECRET_KEY`. La demo corre en Render (`render.yaml`) con Azure Database for MySQL.
+Para usar una base de datos externa se definen `DB_HOST`, `DB_PORT`, `DB_USERNAME`,
+`DB_PASSWORD`, `DB_DBNAME` y `DB_SSL`; al iniciar, `backend/tools/instalar-bd.php` crea las
+tablas si todavía no existen.
 
 ## Endpoints principales
 
